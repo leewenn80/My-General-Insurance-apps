@@ -9,7 +9,7 @@ st.title("🛡️ General Insurance Sub-Agent Policy Tracker")
 
 # 🔗 CONNECT TO GOOGLE SHEET READ/WRITE LINKS
 GSHEET_URL = "https://docs.google.com/spreadsheets/d/1mnX8oKNsVMLmNl6ywLEuPHaR--cdY5_NhdA0-gluHiQ/edit?gid=0#gid=0"
-WEB_APP_URL = https://script.google.com/macros/s/AKfycbxiaJ-c36_VQnqf-YxEWQuNFfF45bSZLICLG1KyuCquxAlwvDnIXSFMCBXQq6J1yw2k9A/exec
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxiaJ-c36_VQnqf-YxEWQuNFfF45bSZLICLG1KyuCquxAlwvDnIXSFMCBXQq6J1yw2k9A/exec"
 
 @st.cache_data(ttl=5)
 def load_data():
