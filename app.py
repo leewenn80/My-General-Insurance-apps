@@ -40,6 +40,7 @@ with tab1:
             recalled_email = match.get("Email Address", "")
             st.caption(f"✅ Found existing record for {search_cust}. Auto-filling details below.")
 
+    # 📋 MAIN SELECTORS (Outside Form)
     st.subheader("📋 Main Selectors")
     sel_col1, sel_col2 = st.columns(2)
     with sel_col1:
@@ -53,29 +54,92 @@ with tab1:
 
     st.markdown("---")
 
-    # Start the form container
-    with st.form("main_policy_form"):
-        col1, col2 = st.columns(2)
+    # 👤 CORE CUSTOMER & POLICY DATA ENTRY (Outside form to allow cross-reading values)
+    st.subheader("👤 Part A: CUSTOMER INFORMATION")
+    c_col1, c_col2 = st.columns(2)
+    with c_col1:
+        cust_name = st.text_input("Name / Company Name", value=search_cust if ('search_cust' in locals() and search_cust != "-- New Customer --") else "")
+        id_label = "Identity No (NRIC)" if cust_type == "Individual" else "Company Registration No"
+        cust_id = st.text_input(id_label, value=recalled_id)
+    with c_col2:
+        contact = st.text_input("Contact Number", value=recalled_contact)
+        email = st.text_input("Email Address", value=recalled_email)
+    address = st.text_area("Mailing Address", height=68, value=recalled_address)
+
+    st.markdown("---")
+
+    # ✈️ TRAVEL INSURANCE DYNAMIC DATA SECTION (Outside form so it updates instantly)
+    travel_summary_log = ""
+    if policy_type == "Travel Insurance":
+        st.subheader("✈️ Part D: Travel Insurance Plan & Insured Persons Details")
         
-        with col1:
-            st.subheader("👤 Part A: CUSTOMER INFORMATION")
-            cust_name = st.text_input("Name / Company Name", value=search_cust if ('search_cust' in locals() and search_cust != "-- New Customer --") else "")
-            id_label = "Identity No (NRIC)" if cust_type == "Individual" else "Company Registration No"
-            cust_id = st.text_input(id_label, value=recalled_id)
-            contact = st.text_input("Contact Number", value=recalled_contact)
-            email = st.text_input("Email Address", value=recalled_email)
-            address = st.text_area("Mailing Address", height=68, value=recalled_address)
+        t_col1, t_col2 = st.columns(2)
+        with t_col1:
+            destination_country = st.text_input("Destination Country (or Region)", placeholder="e.g. Worldwide, Asia-Pacific, Japan")
+        with t_col2:
+            travel_plan_type = st.selectbox("Plan Category", ["Individual Plan", "Spouse Plan", "Family Plan"])
+        
+        st.markdown("#### 👤 Primary Insured Person")
+        same_as_cust = st.checkbox("Insured Person is the same as Customer Information account above")
+        
+        ti_col1, ti_col2 = st.columns(2)
+        with ti_col1:
+            ip_name = st.text_input("Primary Insured Name", value=cust_name if same_as_cust else "")
+            ip_id = st.text_input("Primary Insured NRIC/ID", value=cust_id if same_as_cust else "")
+        with ti_col2:
+            ip_phone = st.text_input("Primary Insured Contact No", value=contact if same_as_cust else "")
+            ip_email = st.text_input("Primary Insured Email Address", value=email if same_as_cust else "")
+        
+        travel_summary_log = f"Plan: {travel_plan_type} to {destination_country} | Primary Insured: {ip_name} ({ip_id})"
+        
+        # SPOUSE MATRIX SHOWS IF SPOUSE OR FAMILY CHOSEN
+        if travel_plan_type in ["Spouse Plan", "Family Plan"]:
+            st.markdown("---")
+            st.markdown("#### 👩‍❤️‍👨 Spouse Details")
+            sp_col1, sp_col2 = st.columns(2)
+            with sp_col1:
+                spouse_name = st.text_input("Spouse Full Name")
+                spouse_id = st.text_input("Spouse NRIC/ID")
+            with sp_col2:
+                spouse_phone = st.text_input("Spouse Contact No")
+                spouse_email = st.text_input("Spouse Email Address")
+            travel_summary_log += f" | Spouse: {spouse_name} ({spouse_id})"
+        
+        # DYNAMIC CHILD COUNT LOGIC IF FAMILY PLAN SELECTED
+        if travel_plan_type == "Family Plan":
+            st.markdown("---")
+            st.markdown("#### 👶 Children Details")
+            child_count = st.number_input("How many children are insured under this family policy?", min_value=1, max_value=10, value=1, step=1)
             
-        with col2:
-            st.subheader("📄 Policy Information")
+            # Generates exact matching text input rows dynamically based on the number above
+            for idx in range(int(child_count)):
+                st.markdown(f"**Child {idx + 1} Profile**")
+                ch_col1, ch_col2, ch_col3 = st.columns(3)
+                with ch_col1:
+                    st.text_input(f"Child {idx+1} Full Name", key=f"ch_name_{idx}")
+                with ch_col2:
+                    st.text_input(f"Child {idx+1} NRIC / Birth Cert No", key=f"ch_id_{idx}")
+                with ch_col3:
+                    st.text_input(f"Child {idx+1} Contact No (If applicable)", key=f"ch_phone_{idx}")
+            travel_summary_log += f" | Children Total Count: {child_count}"
+        st.markdown("---")
+
+    # Final wrap up form for remaining policy metadata and financial math calculation processing
+    with st.form("financial_and_riders_form"):
+        
+        st.subheader("📄 Policy Infrastructure Details")
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
             policy_no = st.text_input("Policy Number")
+        with col_p2:
             sum_assured = st.number_input("Sum Assured (RM)", min_value=0.0, step=1000.0)
-            start_date = st.date_input("Coverage Start Date", datetime.now())
-            end_date = st.date_input("Coverage End Date", datetime.now() + timedelta(days=365))
-            
+        
+        start_date = st.date_input("Coverage Start Date", datetime.now())
+        end_date = st.date_input("Coverage End Date", datetime.now() + timedelta(days=365))
+        
         st.markdown("---")
         
-        # 🚗 SECTION B: MOTOR INSURANCE FIELDS
+        # 🚗 SECTION B: MOTOR INSURANCE RIDERS
         if policy_type == "Motor Insurance":
             st.subheader("🚗 Part B: Motor Insurance Details & Riders")
             mot_col1, mot_col2 = st.columns(2)
@@ -106,7 +170,7 @@ with tab1:
             car_plate, ncd_pct, windscreen, windscreen_amt, perils, llp, llop, waiver_betterment, waiver_excess, towing = "", "0%", False, 0.0, False, False, False, False, False, False
             other_motor_rider_title, other_motor_rider_amt = "", 0.0
 
-        # 🏢 SECTION C: FIRE INSURANCE FIELDS
+        # 🏢 SECTION C: FIRE INSURANCE RISK LOCATION
         if policy_type in ["Fire Insurance", "Condo fire insurance"]:
             st.subheader("🏢 Part C: Fire Insurance Property Details")
             insured_building_address = st.text_area("Insured Building Address (Risk Location)")
@@ -119,66 +183,7 @@ with tab1:
         else:
             insured_building_address, building_type, construction_class = "", "", ""
 
-        # ✈️ NEW SECTION D: TRAVEL INSURANCE DYNAMIC FIELDS
-        travel_summary_log = ""
-        if policy_type == "Travel Insurance":
-            st.subheader("✈️ Part D: Travel Insurance Plan & Risk Group")
-            
-            t_col1, t_col2 = st.columns(2)
-            with t_col1:
-                destination_country = st.text_input("Destination Country (or Region)", placeholder="e.g. Worldwide, Asia-Pacific, Japan")
-            with t_col2:
-                travel_plan_type = st.selectbox("Plan Category", ["Individual Plan", "Spouse Plan", "Family Plan"])
-            
-            st.markdown("#### Member Documentation")
-            same_as_cust = st.checkbox("Insured Person is the same as Customer Information account above")
-            
-            # Primary Insured Fields
-            st.markdown("**1. Primary Insured Person details:**")
-            ti_col1, ti_col2 = st.columns(2)
-            with ti_col1:
-                ip_name = st.text_input("Insured Name", value=cust_name if same_as_cust else "")
-                ip_id = st.text_input("Insured NRIC/ID", value=cust_id if same_as_cust else "")
-            with ti_col2:
-                ip_phone = st.text_input("Insured Contact No", value=contact if same_as_cust else "")
-                ip_email = st.text_input("Insured Email", value=email if same_as_cust else "")
-            
-            travel_summary_log = f"Plan: {travel_plan_type} to {destination_country} | Primary Insured: {ip_name} ({ip_id})"
-            
-            # Spouse Section Conditional Add
-            if travel_plan_type in ["Spouse Plan", "Family Plan"]:
-                st.markdown("---")
-                st.markdown("**2. Spouse Details:**")
-                sp_col1, sp_col2 = st.columns(2)
-                with sp_col1:
-                    spouse_name = st.text_input("Spouse Full Name")
-                    spouse_id = st.text_input("Spouse NRIC/ID")
-                with sp_col2:
-                    spouse_phone = st.text_input("Spouse Contact No")
-                    spouse_email = st.text_input("Spouse Email")
-                travel_summary_log += f" | Spouse: {spouse_name} ({spouse_id})"
-            
-            # Family Section Conditional Add
-            if travel_plan_type == "Family Plan":
-                st.markdown("---")
-                st.markdown("**3. Additional Dependent Family Members:**")
-                member_count = st.number_input("How many additional family members/children to record?", min_value=1, max_value=10, value=1)
-                
-                for idx in range(int(member_count)):
-                    st.markdown(f"**Family Member {idx + 1}**")
-                    fm_col1, fm_col2, fm_col3 = st.columns(3)
-                    with fm_col1:
-                        st.text_input(f"Member {idx+1} Name", key=f"fm_name_{idx}")
-                        st.text_input(f"Member {idx+1} NRIC/ID", key=f"fm_id_{idx}")
-                    with fm_col2:
-                        st.text_input(f"Member {idx+1} Contact No", key=f"fm_phone_{idx}")
-                        st.text_input(f"Member {idx+1} Email Address", key=f"fm_email_{idx}")
-                    with fm_col3:
-                        st.text_input(f"Member {idx+1} Relationship (e.g. Child)", key=f"fm_rel_{idx}")
-                travel_summary_log += f" | Additional Dependents Total: {member_count}"
-            st.markdown("---")
-
-        # Financials and Commission
+        # Financials and Commission Calculations
         st.subheader("💰 Financials & Commission Sharing")
         f_col1, f_col2 = st.columns(2)
         
@@ -197,7 +202,7 @@ with tab1:
             your_comm = total_comm * (sub_agent_share / 100)
             st.success(f"**Your Net Commission:** RM {your_comm:.2f}")
 
-        submit = st.form_submit_button("Save Policy")
+        submit = st.form_submit_button("Save Policy Record")
         
         if submit:
             if not cust_name or not policy_no:
