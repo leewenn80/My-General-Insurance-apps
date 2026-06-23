@@ -2,17 +2,19 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import urllib.parse
+import requests
 
 st.set_page_config(page_title="Insurance Policy Tracker", layout="wide")
 st.title("🛡️ General Insurance Sub-Agent Policy Tracker")
 
-# 🔗 CONNECT TO GOOGLE SHEET (Your link is now correctly placed here!)
+# 🔗 CONNECT TO GOOGLE SHEET READ/WRITE LINKS
 GSHEET_URL = "https://docs.google.com/spreadsheets/d/1mnX8oKNsVMLmNl6ywLEuPHaR--cdY5_NhdA0-gluHiQ/edit?gid=0#gid=0"
+https://script.google.com/macros/s/AKfycbyDzs27jaLR93DZMRVXAK3B8oVstIbxMbXEx2TDJi-cFpPeBGekLSuEs5iI_IehaLCI4g/exec
+WEB_APP_URL = "PASTE_YOUR_COPIED_APPS_SCRIPT_URL_HERE"
 
 @st.cache_data(ttl=5)
 def load_data():
     try:
-        # Convert sharing link to direct export link
         clean_url = GSHEET_URL.split('/edit')[0] + '/export?format=csv&sheet=Policies'
         return pd.read_csv(clean_url)
     except Exception:
@@ -190,7 +192,6 @@ with tab1:
 
     st.markdown("---")
 
-    # Form wrap-up container solely to handle the final click state
     with st.form("final_submission_gate"):
         st.subheader("📄 Base Record Matrix")
         policy_no = st.text_input("Policy Number")
@@ -203,30 +204,38 @@ with tab1:
         if submit:
             if not cust_name or not policy_no:
                 st.error("Please fill in Name and Policy Number.")
+            elif WEB_APP_URL == "PASTE_YOUR_COPIED_APPS_SCRIPT_URL_HERE":
+                st.error("Please paste your Google Apps Script Web App URL on line 13 of the code.")
             else:
+                row_dict = {
+                    "Date Saved": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "Customer": cust_name, "Identity/Reg No": cust_id, "Type": cust_type, 
+                    "Contact No": contact, "Email Address": email, "Mailing Address": address,
+                    "Policy Type": f"PA ({pa_plan_name})" if policy_type == "PA insurance" else policy_type, 
+                    "Policy No": policy_no, "Sum Assured": f"RM {sum_assured:,.2f}",
+                    "Start Date": str(start_date), "End Date": str(end_date),
+                    "Insured Building Address": insured_building_address, "Building Classification": f"{building_type} ({construction_class})",
+                    "Car Plate": car_plate, "NCD %": ncd_pct, "Travel Policy Structure": travel_summary_log,
+                    "Gross Premium": f"RM {gross_premium:,.2f}", "SST": f"RM {sst:,.2f}", "Stamp Duty": f"RM {stamp_duty:,.2f}", 
+                    "Total Payable": f"RM {total_payable:,.2f}", "Your Commission (RM)": f"RM {your_comm:,.2f}",
+                    "Windscreen": f"Yes (RM {windscreen_amt:,.2f})" if windscreen else "No", "Special Perils": "Yes" if perils else "No",
+                    "LLP": "Yes" if llp else "No", "LLOP": "Yes" if llop else "No", "Waiver Betterment": "Yes" if waiver_betterment else "No", 
+                    "Waiver Excess": "Yes" if waiver_excess else "No", "Unlimited Towing": "Yes" if towing else "No",
+                    "Custom Motor Rider": f"{other_motor_rider_title} (RM {other_motor_rider_amt:,.2f})" if other_motor_rider_title else "None"
+                }
+                
+                # Trigger the webhook save
                 try:
-                    row_dict = {
-                        "Date Saved": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "Customer": cust_name, "Identity/Reg No": cust_id, "Type": cust_type, 
-                        "Contact No": contact, "Email Address": email, "Mailing Address": address,
-                        "Policy Type": f"PA ({pa_plan_name})" if policy_type == "PA insurance" else policy_type, 
-                        "Policy No": policy_no, "Sum Assured": f"RM {sum_assured:,.2f}",
-                        "Start Date": str(start_date), "End Date": str(end_date),
-                        "Insured Building Address": insured_building_address, "Building Classification": f"{building_type} ({construction_class})",
-                        "Car Plate": car_plate, "NCD %": ncd_pct, "Travel Policy Structure": travel_summary_log,
-                        "Gross Premium": f"RM {gross_premium:,.2f}", "SST": f"RM {sst:,.2f}", "Stamp Duty": f"RM {stamp_duty:,.2f}", 
-                        "Total Payable": f"RM {total_payable:,.2f}", "Your Commission (RM)": f"RM {your_comm:,.2f}",
-                        "Windscreen": f"Yes (RM {windscreen_amt:,.2f})" if windscreen else "No", "Special Perils": "Yes" if perils else "No",
-                        "LLP": "Yes" if llp else "No", "LLOP": "Yes" if llop else "No", "Waiver Betterment": "Yes" if waiver_betterment else "No", 
-                        "Waiver Excess": "Yes" if waiver_excess else "No", "Unlimited Towing": "Yes" if towing else "No",
-                        "Custom Motor Rider": f"{other_motor_rider_title} (RM {other_motor_rider_amt:,.2f})" if other_motor_rider_title else "None"
-                    }
-                    
-                    st.success("🎉 Policy Form locked into database pipeline!")
-                    st.dataframe(pd.DataFrame([row_dict]))
-                    st.balloons()
+                    response = requests.get(WEB_APP_URL, params=row_dict)
+                    if response.text == "Success":
+                        st.success("🎉 Policy successfully written straight to Google Sheets!")
+                        st.balloons()
+                        st.cache_data.clear() # Forces database pull refresh
+                    else:
+                        st.error("Form processed locally, but cloud macro pipeline returned an invalid handshake.")
                 except Exception as e:
-                    st.error(f"Link connection error: {e}")
+                    st.error(f"Form validation cleared, but webhook delivery failed: {e}")
+
 # --- TAB 2: CUSTOMER HISTORY LOOKUP ---
 with tab2:
     st.header("🔍 Customer Purchase History")
