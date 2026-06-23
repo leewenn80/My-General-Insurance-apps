@@ -40,7 +40,6 @@ with tab1:
             recalled_email = match.get("Email Address", "")
             st.caption(f"✅ Found existing record for {search_cust}. Auto-filling details below.")
 
-    # 🔄 MOVED OUTSIDE THE FORM FOR INSTANT INTERACTIVE SWITCHING
     st.subheader("📋 Main Selectors")
     sel_col1, sel_col2 = st.columns(2)
     with sel_col1:
@@ -54,18 +53,15 @@ with tab1:
 
     st.markdown("---")
 
-    # Start the actual input form
+    # Start the form container
     with st.form("main_policy_form"):
         col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("👤 Part A: CUSTOMER INFORMATION")
             cust_name = st.text_input("Name / Company Name", value=search_cust if ('search_cust' in locals() and search_cust != "-- New Customer --") else "")
-            
-            # FIXED: Guaranteed instant text swap
             id_label = "Identity No (NRIC)" if cust_type == "Individual" else "Company Registration No"
             cust_id = st.text_input(id_label, value=recalled_id)
-            
             contact = st.text_input("Contact Number", value=recalled_contact)
             email = st.text_input("Email Address", value=recalled_email)
             address = st.text_area("Mailing Address", height=68, value=recalled_address)
@@ -79,7 +75,7 @@ with tab1:
             
         st.markdown("---")
         
-        # 🚗 HIDDEN EXCLUSIVELY UNLESS MOTOR IS SELECTED
+        # 🚗 SECTION B: MOTOR INSURANCE FIELDS
         if policy_type == "Motor Insurance":
             st.subheader("🚗 Part B: Motor Insurance Details & Riders")
             mot_col1, mot_col2 = st.columns(2)
@@ -91,7 +87,6 @@ with tab1:
             st.markdown("**Rider Options Attached:**")
             m_col1, m_col2, m_col3 = st.columns(3)
             with m_col1:
-                # FIXED: Simple layout fixes form input locking issues
                 windscreen = st.checkbox("Windscreen Coverage")
                 windscreen_amt = st.number_input("Windscreen Sum Assured (RM)", min_value=0.0, step=100.0)
                 perils = st.checkbox("Special Perils")
@@ -103,7 +98,6 @@ with tab1:
                 waiver_excess = st.checkbox("Waiver Compulsory Excess")
                 towing = st.checkbox("24 Hours Unlimited Towing")
             
-            # NEW: Custom type-in rider option
             st.markdown("**Other Custom Motor Rider:**")
             other_motor_rider_title = st.text_input("Rider Description / Coverage Name", placeholder="e.g. Current Year Betterment Scale Waiver")
             other_motor_rider_amt = st.number_input("Rider Amount Coverage (RM)", min_value=0.0, step=100.0)
@@ -112,20 +106,77 @@ with tab1:
             car_plate, ncd_pct, windscreen, windscreen_amt, perils, llp, llop, waiver_betterment, waiver_excess, towing = "", "0%", False, 0.0, False, False, False, False, False, False
             other_motor_rider_title, other_motor_rider_amt = "", 0.0
 
-        # 🏢 HIDDEN EXCLUSIVELY UNLESS FIRE / CONDO FIRE IS SELECTED
+        # 🏢 SECTION C: FIRE INSURANCE FIELDS
         if policy_type in ["Fire Insurance", "Condo fire insurance"]:
             st.subheader("🏢 Part C: Fire Insurance Property Details")
-            insured_building_address = st.text_area("Insured Building Address (Risk Location)", placeholder="Enter the physical address of the property or residential block being insured...")
-            
-            # Fire-specific details section
+            insured_building_address = st.text_area("Insured Building Address (Risk Location)")
             f_detail1, f_detail2 = st.columns(2)
             with f_detail1:
-                building_type = st.text_input("Type of Building / Occupancy", placeholder="e.g. 4-Storey Flat, Commercial Shophouse, Light Factory")
+                building_type = st.text_input("Type of Building / Occupancy")
             with f_detail2:
-                construction_class = st.selectbox("Construction Class", ["Class 1A (Fully Non-Combustible)", "Class 1B", "Class 2 (Timber Walls/Roof)", "Class 3"])
+                construction_class = st.selectbox("Construction Class", ["Class 1A (Fully Non-Combustible)", "Class 1B", "Class 2 (Timber)", "Class 3"])
             st.markdown("---")
         else:
             insured_building_address, building_type, construction_class = "", "", ""
+
+        # ✈️ NEW SECTION D: TRAVEL INSURANCE DYNAMIC FIELDS
+        travel_summary_log = ""
+        if policy_type == "Travel Insurance":
+            st.subheader("✈️ Part D: Travel Insurance Plan & Risk Group")
+            
+            t_col1, t_col2 = st.columns(2)
+            with t_col1:
+                destination_country = st.text_input("Destination Country (or Region)", placeholder="e.g. Worldwide, Asia-Pacific, Japan")
+            with t_col2:
+                travel_plan_type = st.selectbox("Plan Category", ["Individual Plan", "Spouse Plan", "Family Plan"])
+            
+            st.markdown("#### Member Documentation")
+            same_as_cust = st.checkbox("Insured Person is the same as Customer Information account above")
+            
+            # Primary Insured Fields
+            st.markdown("**1. Primary Insured Person details:**")
+            ti_col1, ti_col2 = st.columns(2)
+            with ti_col1:
+                ip_name = st.text_input("Insured Name", value=cust_name if same_as_cust else "")
+                ip_id = st.text_input("Insured NRIC/ID", value=cust_id if same_as_cust else "")
+            with ti_col2:
+                ip_phone = st.text_input("Insured Contact No", value=contact if same_as_cust else "")
+                ip_email = st.text_input("Insured Email", value=email if same_as_cust else "")
+            
+            travel_summary_log = f"Plan: {travel_plan_type} to {destination_country} | Primary Insured: {ip_name} ({ip_id})"
+            
+            # Spouse Section Conditional Add
+            if travel_plan_type in ["Spouse Plan", "Family Plan"]:
+                st.markdown("---")
+                st.markdown("**2. Spouse Details:**")
+                sp_col1, sp_col2 = st.columns(2)
+                with sp_col1:
+                    spouse_name = st.text_input("Spouse Full Name")
+                    spouse_id = st.text_input("Spouse NRIC/ID")
+                with sp_col2:
+                    spouse_phone = st.text_input("Spouse Contact No")
+                    spouse_email = st.text_input("Spouse Email")
+                travel_summary_log += f" | Spouse: {spouse_name} ({spouse_id})"
+            
+            # Family Section Conditional Add
+            if travel_plan_type == "Family Plan":
+                st.markdown("---")
+                st.markdown("**3. Additional Dependent Family Members:**")
+                member_count = st.number_input("How many additional family members/children to record?", min_value=1, max_value=10, value=1)
+                
+                for idx in range(int(member_count)):
+                    st.markdown(f"**Family Member {idx + 1}**")
+                    fm_col1, fm_col2, fm_col3 = st.columns(3)
+                    with fm_col1:
+                        st.text_input(f"Member {idx+1} Name", key=f"fm_name_{idx}")
+                        st.text_input(f"Member {idx+1} NRIC/ID", key=f"fm_id_{idx}")
+                    with fm_col2:
+                        st.text_input(f"Member {idx+1} Contact No", key=f"fm_phone_{idx}")
+                        st.text_input(f"Member {idx+1} Email Address", key=f"fm_email_{idx}")
+                    with fm_col3:
+                        st.text_input(f"Member {idx+1} Relationship (e.g. Child)", key=f"fm_rel_{idx}")
+                travel_summary_log += f" | Additional Dependents Total: {member_count}"
+            st.markdown("---")
 
         # Financials and Commission
         st.subheader("💰 Financials & Commission Sharing")
@@ -160,6 +211,7 @@ with tab1:
                     "Start Date": str(start_date), "End Date": str(end_date),
                     "Insured Building Address": insured_building_address, "Building Classification": f"{building_type} ({construction_class})",
                     "Car Plate": car_plate, "NCD %": ncd_pct,
+                    "Travel Policy Structure": travel_summary_log if policy_type == "Travel Insurance" else "",
                     "Gross Premium": gross_premium, "SST": sst, "Stamp Duty": stamp_duty, "Total Payable": total_payable,
                     "Your Commission (RM)": round(your_comm, 2),
                     "Windscreen": f"Yes (RM {windscreen_amt})" if windscreen else "No",
