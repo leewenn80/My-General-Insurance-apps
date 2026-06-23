@@ -40,7 +40,7 @@ with tab1:
             recalled_email = match.get("Email Address", "")
             st.caption(f"✅ Found existing record for {search_cust}. Auto-filling details below.")
 
-    # 📋 MAIN SELECTORS (Outside Form)
+    # 📋 MAIN SELECTORS
     st.subheader("📋 Main Selectors")
     sel_col1, sel_col2 = st.columns(2)
     with sel_col1:
@@ -54,7 +54,7 @@ with tab1:
 
     st.markdown("---")
 
-    # 👤 CORE CUSTOMER & POLICY DATA ENTRY (Outside form to allow cross-reading values)
+    # 👤 CORE CUSTOMER INFORMATION
     st.subheader("👤 Part A: CUSTOMER INFORMATION")
     c_col1, c_col2 = st.columns(2)
     with c_col1:
@@ -68,7 +68,7 @@ with tab1:
 
     st.markdown("---")
 
-    # ✈️ TRAVEL INSURANCE DYNAMIC DATA SECTION (Outside form so it updates instantly)
+    # ✈️ TRAVEL INSURANCE DYNAMIC DATA SECTION
     travel_summary_log = ""
     if policy_type == "Travel Insurance":
         st.subheader("✈️ Part D: Travel Insurance Plan & Insured Persons Details")
@@ -92,7 +92,6 @@ with tab1:
         
         travel_summary_log = f"Plan: {travel_plan_type} to {destination_country} | Primary Insured: {ip_name} ({ip_id})"
         
-        # SPOUSE MATRIX SHOWS IF SPOUSE OR FAMILY CHOSEN
         if travel_plan_type in ["Spouse Plan", "Family Plan"]:
             st.markdown("---")
             st.markdown("#### 👩‍❤️‍👨 Spouse Details")
@@ -105,13 +104,11 @@ with tab1:
                 spouse_email = st.text_input("Spouse Email Address")
             travel_summary_log += f" | Spouse: {spouse_name} ({spouse_id})"
         
-        # DYNAMIC CHILD COUNT LOGIC IF FAMILY PLAN SELECTED
         if travel_plan_type == "Family Plan":
             st.markdown("---")
             st.markdown("#### 👶 Children Details")
             child_count = st.number_input("How many children are insured under this family policy?", min_value=1, max_value=10, value=1, step=1)
             
-            # Generates exact matching text input rows dynamically based on the number above
             for idx in range(int(child_count)):
                 st.markdown(f"**Child {idx + 1} Profile**")
                 ch_col1, ch_col2, ch_col3 = st.columns(3)
@@ -124,85 +121,91 @@ with tab1:
             travel_summary_log += f" | Children Total Count: {child_count}"
         st.markdown("---")
 
-    # Final wrap up form for remaining policy metadata and financial math calculation processing
-    with st.form("financial_and_riders_form"):
+    # 🩹 NEW: PA INSURANCE DYNAMIC FIELDS
+    pa_plan_name = ""
+    if policy_type == "PA insurance":
+        st.subheader("🩹 Part E: Personal Accident Insurance Details")
+        pa_plan_name = st.text_input("PA Plan Name / Package Description", placeholder="e.g. SafeTravel PA Plan A, Executive Shield 200k")
+        st.markdown("---")
+
+    # 🏢 FIRE INSURANCE PROPERTY DETAILS
+    if policy_type in ["Fire Insurance", "Condo fire insurance"]:
+        st.subheader("🏢 Part C: Fire Insurance Property Details")
+        insured_building_address = st.text_area("Insured Building Address (Risk Location)")
+        f_detail1, f_detail2 = st.columns(2)
+        with f_detail1:
+            building_type = st.text_input("Type of Building / Occupancy")
+        with f_detail2:
+            construction_class = st.selectbox("Construction Class", ["Class 1A (Fully Non-Combustible)", "Class 1B", "Class 2 (Timber)", "Class 3"])
+        st.markdown("---")
+    else:
+        insured_building_address, building_type, construction_class = "", "", ""
+
+    # 🚗 MOTOR INSURANCE RIDERS SECTION
+    if policy_type == "Motor Insurance":
+        st.subheader("🚗 Part B: Motor Insurance Details & Riders")
+        mot_col1, mot_col2 = st.columns(2)
+        with mot_col1:
+            car_plate = st.text_input("Car Plate Number")
+        with mot_col2:
+            ncd_pct = st.selectbox("NCD Percentage", ["0%", "25%", "30%", "38.33%", "45%", "55%"])
+            
+        st.markdown("**Rider Options Attached:**")
+        m_col1, m_col2, m_col3 = st.columns(3)
+        with m_col1:
+            windscreen = st.checkbox("Windscreen Coverage")
+            windscreen_amt = st.number_input("Windscreen Sum Assured (RM)", min_value=0.0, step=100.0)
+            perils = st.checkbox("Special Perils")
+        with m_col2:
+            llp = st.checkbox("Legal Liability to Passenger (LLP)")
+            llop = st.checkbox("Legal Liabilities of Passenger (LLOP)")
+            waiver_betterment = st.checkbox("Waiver of Betterment")
+        with m_col3:
+            waiver_excess = st.checkbox("Waiver Compulsory Excess")
+            towing = st.checkbox("24 Hours Unlimited Towing")
         
-        st.subheader("📄 Policy Infrastructure Details")
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            policy_no = st.text_input("Policy Number")
-        with col_p2:
-            sum_assured = st.number_input("Sum Assured (RM)", min_value=0.0, step=1000.0)
+        st.markdown("**Other Custom Motor Rider:**")
+        other_motor_rider_title = st.text_input("Rider Description / Coverage Name", placeholder="e.g. Current Year Betterment Scale Waiver")
+        other_motor_rider_amt = st.number_input("Rider Amount Coverage (RM)", min_value=0.0, step=100.0)
+        st.markdown("---")
+    else:
+        car_plate, ncd_pct, windscreen, windscreen_amt, perils, llp, llop, waiver_betterment, waiver_excess, towing = "", "0%", False, 0.0, False, False, False, False, False, False
+        other_motor_rider_title, other_motor_rider_amt = "", 0.0
+
+    # 💰 FINANCIALS & COMMISSION SHARING (Moved completely outside the form to make live math work)
+    st.subheader("💰 Financials & Commission Sharing")
+    f_col1, f_col2 = st.columns(2)
+    
+    with f_col1:
+        gross_premium = st.number_input("Gross Premium (RM)", min_value=0.0, step=10.0, format="%.2f")
+        sst = st.number_input("SST (RM)", min_value=0.0, step=1.0, format="%.2f")
+        stamp_duty = st.number_input("Stamp Duty (RM)", min_value=0.0, step=10.0, value=10.0, format="%.2f")
+        
+        # ⚡ LIVE INSTANT CALCULATION
+        total_payable = gross_premium + sst + stamp_duty
+        st.info(f"**Total Payable by Client:** RM {total_payable:,.2f}") # Formatted 1,000.00
+        
+    with f_col2:
+        comm_pct = st.number_input("Total Policy Commission (%)", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
+        sub_agent_share = st.number_input("Your Sharing Share (%)", min_value=0.0, max_value=100.0, value=60.0, step=1.0)
+        
+        # ⚡ LIVE INSTANT CALCULATION
+        total_comm = gross_premium * (comm_pct / 100)
+        your_comm = total_comm * (sub_agent_share / 100)
+        st.success(f"**Your Net Commission:** RM {your_comm:,.2f}") # Formatted 1,000.00
+
+    st.markdown("---")
+
+    # Form wrap-up container solely to handle the final click state
+    with st.form("final_submission_gate"):
+        st.subheader("📄 Base Record Matrix")
+        policy_no = st.text_input("Policy Number")
+        sum_assured = st.number_input("Sum Assured (RM)", min_value=0.0, step=1000.0, format="%.2f")
         
         start_date = st.date_input("Coverage Start Date", datetime.now())
         end_date = st.date_input("Coverage End Date", datetime.now() + timedelta(days=365))
         
-        st.markdown("---")
-        
-        # 🚗 SECTION B: MOTOR INSURANCE RIDERS
-        if policy_type == "Motor Insurance":
-            st.subheader("🚗 Part B: Motor Insurance Details & Riders")
-            mot_col1, mot_col2 = st.columns(2)
-            with mot_col1:
-                car_plate = st.text_input("Car Plate Number")
-            with mot_col2:
-                ncd_pct = st.selectbox("NCD Percentage", ["0%", "25%", "30%", "38.33%", "45%", "55%"])
-                
-            st.markdown("**Rider Options Attached:**")
-            m_col1, m_col2, m_col3 = st.columns(3)
-            with m_col1:
-                windscreen = st.checkbox("Windscreen Coverage")
-                windscreen_amt = st.number_input("Windscreen Sum Assured (RM)", min_value=0.0, step=100.0)
-                perils = st.checkbox("Special Perils")
-            with m_col2:
-                llp = st.checkbox("Legal Liability to Passenger (LLP)")
-                llop = st.checkbox("Legal Liabilities of Passenger (LLOP)")
-                waiver_betterment = st.checkbox("Waiver of Betterment")
-            with m_col3:
-                waiver_excess = st.checkbox("Waiver Compulsory Excess")
-                towing = st.checkbox("24 Hours Unlimited Towing")
-            
-            st.markdown("**Other Custom Motor Rider:**")
-            other_motor_rider_title = st.text_input("Rider Description / Coverage Name", placeholder="e.g. Current Year Betterment Scale Waiver")
-            other_motor_rider_amt = st.number_input("Rider Amount Coverage (RM)", min_value=0.0, step=100.0)
-            st.markdown("---")
-        else:
-            car_plate, ncd_pct, windscreen, windscreen_amt, perils, llp, llop, waiver_betterment, waiver_excess, towing = "", "0%", False, 0.0, False, False, False, False, False, False
-            other_motor_rider_title, other_motor_rider_amt = "", 0.0
-
-        # 🏢 SECTION C: FIRE INSURANCE RISK LOCATION
-        if policy_type in ["Fire Insurance", "Condo fire insurance"]:
-            st.subheader("🏢 Part C: Fire Insurance Property Details")
-            insured_building_address = st.text_area("Insured Building Address (Risk Location)")
-            f_detail1, f_detail2 = st.columns(2)
-            with f_detail1:
-                building_type = st.text_input("Type of Building / Occupancy")
-            with f_detail2:
-                construction_class = st.selectbox("Construction Class", ["Class 1A (Fully Non-Combustible)", "Class 1B", "Class 2 (Timber)", "Class 3"])
-            st.markdown("---")
-        else:
-            insured_building_address, building_type, construction_class = "", "", ""
-
-        # Financials and Commission Calculations
-        st.subheader("💰 Financials & Commission Sharing")
-        f_col1, f_col2 = st.columns(2)
-        
-        with f_col1:
-            gross_premium = st.number_input("Gross Premium (RM)", min_value=0.0, step=10.0)
-            sst = st.number_input("SST (RM)", min_value=0.0, step=1.0)
-            stamp_duty = st.number_input("Stamp Duty (RM)", min_value=10.0, step=10.0, value=10.0)
-            total_payable = gross_premium + sst + stamp_duty
-            st.info(f"**Total Payable by Client:** RM {total_payable:.2f}")
-            
-        with f_col2:
-            comm_pct = st.number_input("Total Policy Commission (%)", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
-            sub_agent_share = st.number_input("Your Sharing Share (%)", min_value=0.0, max_value=100.0, value=60.0, step=1.0)
-            
-            total_comm = gross_premium * (comm_pct / 100)
-            your_comm = total_comm * (sub_agent_share / 100)
-            st.success(f"**Your Net Commission:** RM {your_comm:.2f}")
-
-        submit = st.form_submit_button("Save Policy Record")
+        submit = st.form_submit_button("Confirm & Save Policy Record")
         
         if submit:
             if not cust_name or not policy_no:
@@ -212,18 +215,19 @@ with tab1:
                     "Date Saved": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "Customer": cust_name, "Identity/Reg No": cust_id, "Type": cust_type, 
                     "Contact No": contact, "Email Address": email, "Mailing Address": address,
-                    "Policy Type": policy_type, "Policy No": policy_no, "Sum Assured": sum_assured,
+                    "Policy Type": f"PA ({pa_plan_name})" if policy_type == "PA insurance" else policy_type, 
+                    "Policy No": policy_no, "Sum Assured": f"RM {sum_assured:,.2f}",
                     "Start Date": str(start_date), "End Date": str(end_date),
                     "Insured Building Address": insured_building_address, "Building Classification": f"{building_type} ({construction_class})",
                     "Car Plate": car_plate, "NCD %": ncd_pct,
                     "Travel Policy Structure": travel_summary_log if policy_type == "Travel Insurance" else "",
-                    "Gross Premium": gross_premium, "SST": sst, "Stamp Duty": stamp_duty, "Total Payable": total_payable,
-                    "Your Commission (RM)": round(your_comm, 2),
-                    "Windscreen": f"Yes (RM {windscreen_amt})" if windscreen else "No",
+                    "Gross Premium": f"RM {gross_premium:,.2f}", "SST": f"RM {sst:,.2f}", "Stamp Duty": f"RM {stamp_duty:,.2f}", 
+                    "Total Payable": f"RM {total_payable:,.2f}", "Your Commission (RM)": f"RM {your_comm:,.2f}",
+                    "Windscreen": f"Yes (RM {windscreen_amt:,.2f})" if windscreen else "No",
                     "Special Perils": "Yes" if perils else "No", "LLP": "Yes" if llp else "No", 
                     "LLOP": "Yes" if llop else "No", "Waiver Betterment": "Yes" if waiver_betterment else "No", 
                     "Waiver Excess": "Yes" if waiver_excess else "No", "Unlimited Towing": "Yes" if towing else "No",
-                    "Custom Motor Rider": f"{other_motor_rider_title} (RM {other_motor_rider_amt})" if other_motor_rider_title else "None"
+                    "Custom Motor Rider": f"{other_motor_rider_title} (RM {other_motor_rider_amt:,.2f})" if other_motor_rider_title else "None"
                 }])
                 
                 st.success("🎉 Policy Form validated successfully!")
