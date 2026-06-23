@@ -21,20 +21,19 @@ def load_data():
 
 existing_df = load_data()
 
+# Helper function to auto-format Malaysian Phone Numbers (e.g., 0122816710 -> 012-2816710)
 def format_phone(phone_str):
     phone_clean = "".join(filter(str.isdigit, str(phone_str)))
-    if not phone_clean:
-        return phone_str
-    if not phone_clean.startswith("0") and len(phone_clean) in [9, 10]:
-        phone_clean = "0" + phone_clean
-        
-    if len(phone_clean) >= 10:
+    if len(phone_clean) >= 10 and phone_clean.startswith("0"):
+        # Handles standard 3-digit prefixes (012, 013, 014, 016, 017, 018, 019)
         if phone_clean[:3] in ["012", "013", "014", "016", "017", "018", "019"]:
             return f"{phone_clean[:3]}-{phone_clean[3:]}"
+        # Handles 4-digit prefixes (011-XXXXXXXX)
         elif phone_clean[:3] == "011":
             return f"{phone_clean[:4]}-{phone_clean[4:]}"
     return phone_str
 
+# Helper function to auto-format Malaysian NRIC Numbers (e.g., 800501045107 -> 800501-04-5107)
 def format_nric(nric_str):
     nric_clean = "".join(filter(str.isdigit, str(nric_str)))
     if len(nric_clean) == 12:
@@ -83,9 +82,9 @@ with tab1:
     with c_col1:
         cust_name = st.text_input("Name / Company Name", value=search_cust if ('search_cust' in locals() and search_cust != "-- New Customer --") else "")
         id_label = "Identity No (NRIC)" if cust_type == "Individual" else "Company Registration No"
-        cust_id = st.text_input(id_label, value=recalled_id)
+        cust_id = st.text_input(id_label, value=recalled_id, placeholder="Type digits without hyphens...")
     with c_col2:
-        contact = st.text_input("Contact Number", value=recalled_contact)
+        contact = st.text_input("Contact Number", value=recalled_contact, placeholder="e.g. 0122816710")
         email = st.text_input("Email Address", value=recalled_email)
     address = st.text_area("Mailing Address", height=68, value=recalled_address)
 
@@ -224,15 +223,16 @@ with tab1:
             if not cust_name or not policy_no:
                 st.error("Please fill in Name and Policy Number.")
             else:
+                # Apply the formatting formulas right before sending to Google Sheets
                 formatted_contact = format_phone(contact)
                 formatted_identity = format_nric(cust_id) if cust_type == "Individual" else cust_id
 
                 row_dict = {
                     "Date Saved": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "Customer": cust_name, 
-                    "Identity/Reg No": str(formatted_identity), 
+                    "Identity/Reg No": formatted_identity, # SYNCED WITH SPREADSHEET HEADER
                     "Type": cust_type, 
-                    "Contact No": str(formatted_contact), 
+                    "Contact No": formatted_contact, # AUTO FORMATTED HYPHEN
                     "Email Address": email, 
                     "Mailing Address": address,
                     "Policy Type": f"PA ({pa_plan_name})" if policy_type == "PA insurance" else policy_type, 
@@ -261,23 +261,15 @@ with tab1:
                 }
                 
                 try:
-                    # FIXED: Added safety limits (timeout & allow_redirects) so it can never hang up the screen
-                    clean_params = {k: str(v) for k, v in row_dict.items()}
-                    response = requests.get(WEB_APP_URL, params=clean_params, timeout=5, allow_redirects=True)
-                    
-                    # If Google says OK, or even redirects successfully, consider it sent!
-                    if response.status_code in [200, 302]:
-                        st.success("🎉 Policy successfully written straight to Google Sheets!")
+                    response = requests.get(WEB_APP_URL, params=row_dict)
+                    if response.text == "Success":
+                        st.success("🎉 Policy successfully written straight to Google Sheets with custom formatting!")
                         st.balloons()
                         st.cache_data.clear()
                     else:
-                        st.warning("Data dispatched, but network handshake returned an alternate status code.")
-                except requests.exceptions.Timeout:
-                    # Safety net: Even if the network connection signals timeout, Google Apps Script usually receives it!
-                    st.success("🚀 Dispatched! Check your Google Sheet in a moment to confirm registration row.")
-                    st.cache_data.clear()
+                        st.error("Form processed locally, but cloud macro pipeline returned an invalid handshake.")
                 except Exception as e:
-                    st.error(f"Form submission error: {e}")
+                    st.error(f"Form validation cleared, but webhook delivery failed: {e}")
 
 # --- TAB 2: CUSTOMER HISTORY LOOKUP ---
 with tab2:
