@@ -9,7 +9,7 @@ st.title("🛡️ General Insurance Sub-Agent Policy Tracker")
 
 # 🔗 CONNECT TO GOOGLE SHEET READ/WRITE LINKS
 GSHEET_URL = "https://docs.google.com/spreadsheets/d/1mnX8oKNsVMLmNl6ywLEuPHaR--cdY5_NhdA0-gluHiQ/edit?gid=0#gid=0"
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxiaJ-c36_VQnqf-YxEWQuNFfF45bSZLICLG1KyuCquxAlwvDnIXSFMCBXQq6J1yw2k9A/exec"
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxiaJ-c36_VQnqf-YxEWQuNFf45bSZLICLG1KyuCquxAlwvDnIXSFMCBXQq6J1yw2k9A/exec"
 
 @st.cache_data(ttl=5)
 def load_data():
@@ -20,6 +20,25 @@ def load_data():
         return pd.DataFrame()
 
 existing_df = load_data()
+
+# Helper function to auto-format Malaysian Phone Numbers (e.g., 0122816710 -> 012-2816710)
+def format_phone(phone_str):
+    phone_clean = "".join(filter(str.isdigit, str(phone_str)))
+    if len(phone_clean) >= 10 and phone_clean.startswith("0"):
+        # Handles standard 3-digit prefixes (012, 013, 014, 016, 017, 018, 019)
+        if phone_clean[:3] in ["012", "013", "014", "016", "017", "018", "019"]:
+            return f"{phone_clean[:3]}-{phone_clean[3:]}"
+        # Handles 4-digit prefixes (011-XXXXXXXX)
+        elif phone_clean[:3] == "011":
+            return f"{phone_clean[:4]}-{phone_clean[4:]}"
+    return phone_str
+
+# Helper function to auto-format Malaysian NRIC Numbers (e.g., 800501045107 -> 800501-04-5107)
+def format_nric(nric_str):
+    nric_clean = "".join(filter(str.isdigit, str(nric_str)))
+    if len(nric_clean) == 12:
+        return f"{nric_clean[:6]}-{nric_clean[6:8]}-{nric_clean[8:]}"
+    return nric_str
 
 tab1, tab2, tab3 = st.tabs(["📝 Register New Policy", "🔍 Customer History Lookup", "📊 View Sales Ledger"])
 
@@ -63,9 +82,9 @@ with tab1:
     with c_col1:
         cust_name = st.text_input("Name / Company Name", value=search_cust if ('search_cust' in locals() and search_cust != "-- New Customer --") else "")
         id_label = "Identity No (NRIC)" if cust_type == "Individual" else "Company Registration No"
-        cust_id = st.text_input(id_label, value=recalled_id)
+        cust_id = st.text_input(id_label, value=recalled_id, placeholder="Type digits without hyphens...")
     with c_col2:
-        contact = st.text_input("Contact Number", value=recalled_contact)
+        contact = st.text_input("Contact Number", value=recalled_contact, placeholder="e.g. 0122816710")
         email = st.text_input("Email Address", value=recalled_email)
     address = st.text_area("Mailing Address", height=68, value=recalled_address)
 
@@ -92,7 +111,7 @@ with tab1:
             ip_phone = st.text_input("Primary Insured Contact No", value=contact if same_as_cust else "")
             ip_email = st.text_input("Primary Insured Email Address", value=email if same_as_cust else "")
         
-        travel_summary_log = f"Plan: {travel_plan_type} to {destination_country} | Primary Insured: {ip_name} ({ip_id})"
+        travel_summary_log = f"Plan: {travel_plan_type} to {destination_country} | Primary Insured: {ip_name} ({format_nric(ip_id)})"
         
         if travel_plan_type in ["Spouse Plan", "Family Plan"]:
             st.markdown("---")
@@ -104,7 +123,7 @@ with tab1:
             with sp_col2:
                 spouse_phone = st.text_input("Spouse Contact No")
                 spouse_email = st.text_input("Spouse Email Address")
-            travel_summary_log += f" | Spouse: {spouse_name} ({spouse_id})"
+            travel_summary_log += f" | Spouse: {spouse_name} ({format_nric(spouse_id)})"
         
         if travel_plan_type == "Family Plan":
             st.markdown("---")
@@ -203,33 +222,50 @@ with tab1:
         if submit:
             if not cust_name or not policy_no:
                 st.error("Please fill in Name and Policy Number.")
-            elif WEB_APP_URL == "PASTE_YOUR_COPIED_APPS_SCRIPT_URL_HERE":
-                st.error("Please paste your Google Apps Script Web App URL on line 13 of the code.")
             else:
+                # Apply the formatting formulas right before sending to Google Sheets
+                formatted_contact = format_phone(contact)
+                formatted_identity = format_nric(cust_id) if cust_type == "Individual" else cust_id
+
                 row_dict = {
                     "Date Saved": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "Customer": cust_name, "Identity/Reg No": cust_id, "Type": cust_type, 
-                    "Contact No": contact, "Email Address": email, "Mailing Address": address,
+                    "Customer": cust_name, 
+                    "Identity/Reg No": formatted_identity, # SYNCED WITH SPREADSHEET HEADER
+                    "Type": cust_type, 
+                    "Contact No": formatted_contact, # AUTO FORMATTED HYPHEN
+                    "Email Address": email, 
+                    "Mailing Address": address,
                     "Policy Type": f"PA ({pa_plan_name})" if policy_type == "PA insurance" else policy_type, 
-                    "Policy No": policy_no, "Sum Assured": f"RM {sum_assured:,.2f}",
-                    "Start Date": str(start_date), "End Date": str(end_date),
-                    "Insured Building Address": insured_building_address, "Building Classification": f"{building_type} ({construction_class})",
-                    "Car Plate": car_plate, "NCD %": ncd_pct, "Travel Policy Structure": travel_summary_log,
-                    "Gross Premium": f"RM {gross_premium:,.2f}", "SST": f"RM {sst:,.2f}", "Stamp Duty": f"RM {stamp_duty:,.2f}", 
-                    "Total Payable": f"RM {total_payable:,.2f}", "Your Commission (RM)": f"RM {your_comm:,.2f}",
-                    "Windscreen": f"Yes (RM {windscreen_amt:,.2f})" if windscreen else "No", "Special Perils": "Yes" if perils else "No",
-                    "LLP": "Yes" if llp else "No", "LLOP": "Yes" if llop else "No", "Waiver Betterment": "Yes" if waiver_betterment else "No", 
-                    "Waiver Excess": "Yes" if waiver_excess else "No", "Unlimited Towing": "Yes" if towing else "No",
+                    "Policy No": policy_no, 
+                    "Sum Assured": f"RM {sum_assured:,.2f}",
+                    "Start Date": str(start_date), 
+                    "End Date": str(end_date),
+                    "Insured Building Address": insured_building_address, 
+                    "Building Classification": f"{building_type} ({construction_class})" if insured_building_address else "",
+                    "Car Plate": car_plate, 
+                    "NCD %": ncd_pct, 
+                    "Travel Policy Structure": travel_summary_log,
+                    "Gross Premium": f"RM {gross_premium:,.2f}", 
+                    "SST": f"RM {sst:,.2f}", 
+                    "Stamp Duty": f"RM {stamp_duty:,.2f}", 
+                    "Total Payable": f"RM {total_payable:,.2f}", 
+                    "Your Commission (RM)": f"RM {your_comm:,.2f}",
+                    "Windscreen": f"Yes (RM {windscreen_amt:,.2f})" if windscreen else "No", 
+                    "Special Perils": "Yes" if perils else "No",
+                    "LLP": "Yes" if llp else "No", 
+                    "LLOP": "Yes" if llop else "No", 
+                    "Waiver Betterment": "Yes" if waiver_betterment else "No", 
+                    "Waiver Excess": "Yes" if waiver_excess else "No", 
+                    "Unlimited Towing": "Yes" if towing else "No",
                     "Custom Motor Rider": f"{other_motor_rider_title} (RM {other_motor_rider_amt:,.2f})" if other_motor_rider_title else "None"
                 }
                 
-                # Trigger the webhook save
                 try:
                     response = requests.get(WEB_APP_URL, params=row_dict)
                     if response.text == "Success":
-                        st.success("🎉 Policy successfully written straight to Google Sheets!")
+                        st.success("🎉 Policy successfully written straight to Google Sheets with custom formatting!")
                         st.balloons()
-                        st.cache_data.clear() # Forces database pull refresh
+                        st.cache_data.clear()
                     else:
                         st.error("Form processed locally, but cloud macro pipeline returned an invalid handshake.")
                 except Exception as e:
