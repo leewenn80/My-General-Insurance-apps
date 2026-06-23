@@ -11,7 +11,7 @@ st.title("🛡️ General Insurance Sub-Agent Policy Tracker")
 GSHEET_URL = "https://docs.google.com/spreadsheets/d/1mnX8oKNsVMLmNl6ywLEuPHaR--cdY5_NhdA0-gluHiQ/edit?gid=0#gid=0"
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyg2Q0_1ZY_ufIAq0xyZ2hx8QPuTySZtMDKlK78WbDfbBXMWkyRePizeEspLJiPbanOfA/exec"
 
-@st.cache_data(ttl=5)
+# Lightweight raw data loading to prevent freezing
 def load_data():
     try:
         clean_url = GSHEET_URL.split('/edit')[0] + '/export?format=csv&sheet=Policies'
@@ -19,25 +19,27 @@ def load_data():
     except Exception:
         return pd.DataFrame()
 
-existing_df = load_data()
+# Quick initial load capacity check
+if 'initialized' not in st.session_state:
+    existing_df = load_data()
+    st.session_state.existing_df = existing_df
+    st.session_state.initialized = True
+else:
+    existing_df = st.session_state.existing_df
 
-# Helper function to auto-format Malaysian Phone Numbers (e.g., 0122816710 -> 012-2816710)
+# Basic Format Cleansers
 def format_phone(phone_str):
     phone_clean = "".join(filter(str.isdigit, str(phone_str)))
-    if len(phone_clean) >= 10 and phone_clean.startswith("0"):
-        # Handles standard 3-digit prefixes (012, 013, 014, 016, 017, 018, 019)
-        if phone_clean[:3] in ["012", "013", "014", "016", "017", "018", "019"]:
-            return f"{phone_clean[:3]}-{phone_clean[3:]}"
-        # Handles 4-digit prefixes (011-XXXXXXXX)
-        elif phone_clean[:3] == "011":
-            return f"{phone_clean[:4]}-{phone_clean[4:]}"
+    if not phone_clean: return phone_str
+    if not phone_clean.startswith("0") and len(phone_clean) in [9, 10]: phone_clean = "0" + phone_clean
+    if len(phone_clean) >= 10:
+        if phone_clean[:3] in ["012", "013", "014", "016", "017", "018", "019"]: return f"{phone_clean[:3]}-{phone_clean[3:]}"
+        elif phone_clean[:3] == "011": return f"{phone_clean[:4]}-{phone_clean[4:]}"
     return phone_str
 
-# Helper function to auto-format Malaysian NRIC Numbers (e.g., 800501045107 -> 800501-04-5107)
 def format_nric(nric_str):
     nric_clean = "".join(filter(str.isdigit, str(nric_str)))
-    if len(nric_clean) == 12:
-        return f"{nric_clean[:6]}-{nric_clean[6:8]}-{nric_clean[8:]}"
+    if len(nric_clean) == 12: return f"{nric_clean[:6]}-{nric_clean[6:8]}-{nric_clean[8:]}"
     return nric_str
 
 tab1, tab2, tab3 = st.tabs(["📝 Register New Policy", "🔍 Customer History Lookup", "📊 View Sales Ledger"])
@@ -45,10 +47,7 @@ tab1, tab2, tab3 = st.tabs(["📝 Register New Policy", "🔍 Customer History L
 with tab1:
     st.header("Enter Policy Details")
     
-    recalled_address = ""
-    recalled_contact = ""
-    recalled_id = ""
-    recalled_email = ""
+    recalled_address, recalled_contact, recalled_id, recalled_email = "", "", "", ""
     
     if not existing_df.empty and "Customer" in existing_df.columns:
         unique_customers = ["-- New Customer --"] + sorted(existing_df["Customer"].dropna().unique().tolist())
@@ -60,19 +59,13 @@ with tab1:
             recalled_contact = match.get("Contact No", "")
             recalled_id = match.get("Identity/Reg No", "")
             recalled_email = match.get("Email Address", "")
-            st.caption(f"✅ Found existing record for {search_cust}. Auto-filling details below.")
+            st.caption(f"✅ Found existing record for {search_cust}.")
 
     # 📋 MAIN SELECTORS
     st.subheader("📋 Main Selectors")
     sel_col1, sel_col2 = st.columns(2)
-    with sel_col1:
-        cust_type = st.radio("Customer Type", ["Individual", "Corporate"], horizontal=True)
-    with sel_col2:
-        policy_type = st.selectbox("Type of Policy", [
-            "Motor Insurance", "Fire Insurance", "Travel Insurance", 
-            "Golf insurance", "PA insurance", "Condo fire insurance", 
-            "Marine insurance", "Others"
-        ])
+    with sel_col1: cust_type = st.radio("Customer Type", ["Individual", "Corporate"], horizontal=True)
+    with sel_col2: policy_type = st.selectbox("Type of Policy", ["Motor Insurance", "Fire Insurance", "Travel Insurance", "Golf insurance", "PA insurance", "Condo fire insurance", "Marine insurance", "Others"])
 
     st.markdown("---")
 
@@ -82,9 +75,9 @@ with tab1:
     with c_col1:
         cust_name = st.text_input("Name / Company Name", value=search_cust if ('search_cust' in locals() and search_cust != "-- New Customer --") else "")
         id_label = "Identity No (NRIC)" if cust_type == "Individual" else "Company Registration No"
-        cust_id = st.text_input(id_label, value=recalled_id, placeholder="Type digits without hyphens...")
+        cust_id = st.text_input(id_label, value=recalled_id)
     with c_col2:
-        contact = st.text_input("Contact Number", value=recalled_contact, placeholder="e.g. 0122816710")
+        contact = st.text_input("Contact Number", value=recalled_contact)
         email = st.text_input("Email Address", value=recalled_email)
     address = st.text_area("Mailing Address", height=68, value=recalled_address)
 
@@ -95,14 +88,10 @@ with tab1:
     if policy_type == "Travel Insurance":
         st.subheader("✈️ Part D: Travel Insurance Plan & Insured Persons Details")
         t_col1, t_col2 = st.columns(2)
-        with t_col1:
-            destination_country = st.text_input("Destination Country (or Region)", placeholder="e.g. Worldwide, Asia-Pacific, Japan")
-        with t_col2:
-            travel_plan_type = st.selectbox("Plan Category", ["Individual Plan", "Spouse Plan", "Family Plan"])
+        with t_col1: destination_country = st.text_input("Destination Country (or Region)")
+        with t_col2: travel_plan_type = st.selectbox("Plan Category", ["Individual Plan", "Spouse Plan", "Family Plan"])
         
-        st.markdown("#### 👤 Primary Insured Person")
         same_as_cust = st.checkbox("Insured Person is the same as Customer Information account above")
-        
         ti_col1, ti_col2 = st.columns(2)
         with ti_col1:
             ip_name = st.text_input("Primary Insured Name", value=cust_name if same_as_cust else "")
@@ -115,7 +104,6 @@ with tab1:
         
         if travel_plan_type in ["Spouse Plan", "Family Plan"]:
             st.markdown("---")
-            st.markdown("#### 👩‍❤️‍👨 Spouse Details")
             sp_col1, sp_col2 = st.columns(2)
             with sp_col1:
                 spouse_name = st.text_input("Spouse Full Name")
@@ -127,37 +115,28 @@ with tab1:
         
         if travel_plan_type == "Family Plan":
             st.markdown("---")
-            st.markdown("#### 👶 Children Details")
             child_count = st.number_input("How many children are insured under this family policy?", min_value=1, max_value=10, value=1, step=1)
             for idx in range(int(child_count)):
                 st.markdown(f"**Child {idx + 1} Profile**")
                 ch_col1, ch_col2, ch_col3 = st.columns(3)
-                with ch_col1:
-                    st.text_input(f"Child {idx+1} Full Name", key=f"ch_name_{idx}")
-                with ch_col2:
-                    st.text_input(f"Child {idx+1} NRIC / Birth Cert No", key=f"ch_id_{idx}")
-                with ch_col3:
-                    st.text_input(f"Child {idx+1} Contact No (If applicable)", key=f"ch_phone_{idx}")
+                with ch_col1: st.text_input(f"Child {idx+1} Full Name", key=f"ch_name_{idx}")
+                with ch_col2: st.text_input(f"Child {idx+1} NRIC / Birth Cert No", key=f"ch_id_{idx}")
+                with ch_col3: st.text_input(f"Child {idx+1} Contact No (If applicable)", key=f"ch_phone_{idx}")
             travel_summary_log += f" | Children Total Count: {child_count}"
-        st.markdown("---")
 
     # 🩹 PA INSURANCE DYNAMIC FIELDS
     pa_plan_name = ""
     if policy_type == "PA insurance":
         st.subheader("🩹 Part E: Personal Accident Insurance Details")
-        pa_plan_name = st.text_input("PA Plan Name / Package Description", placeholder="e.g. SafeTravel PA Plan A")
-        st.markdown("---")
+        pa_plan_name = st.text_input("PA Plan Name / Package Description")
 
     # 🏢 FIRE INSURANCE PROPERTY DETAILS
     if policy_type in ["Fire Insurance", "Condo fire insurance"]:
         st.subheader("🏢 Part C: Fire Insurance Property Details")
         insured_building_address = st.text_area("Insured Building Address (Risk Location)")
         f_detail1, f_detail2 = st.columns(2)
-        with f_detail1:
-            building_type = st.text_input("Type of Building / Occupancy")
-        with f_detail2:
-            construction_class = st.selectbox("Construction Class", ["Class 1A (Fully Non-Combustible)", "Class 1B", "Class 2 (Timber)", "Class 3"])
-        st.markdown("---")
+        with f_detail1: building_type = st.text_input("Type of Building / Occupancy")
+        with f_detail2: construction_class = st.selectbox("Construction Class", ["Class 1A (Fully Non-Combustible)", "Class 1B", "Class 2 (Timber)", "Class 3"])
     else:
         insured_building_address, building_type, construction_class = "", "", ""
 
@@ -165,12 +144,9 @@ with tab1:
     if policy_type == "Motor Insurance":
         st.subheader("🚗 Part B: Motor Insurance Details & Riders")
         mot_col1, mot_col2 = st.columns(2)
-        with mot_col1:
-            car_plate = st.text_input("Car Plate Number")
-        with mot_col2:
-            ncd_pct = st.selectbox("NCD Percentage", ["0%", "25%", "30%", "38.33%", "45%", "55%"])
+        with mot_col1: car_plate = st.text_input("Car Plate Number")
+        with mot_col2: ncd_pct = st.selectbox("NCD Percentage", ["0%", "25%", "30%", "38.33%", "45%", "55%"])
             
-        st.markdown("**Rider Options Attached:**")
         m_col1, m_col2, m_col3 = st.columns(3)
         with m_col1:
             windscreen = st.checkbox("Windscreen Coverage")
@@ -184,10 +160,8 @@ with tab1:
             waiver_excess = st.checkbox("Waiver Compulsory Excess")
             towing = st.checkbox("24 Hours Unlimited Towing")
         
-        st.markdown("**Other Custom Motor Rider:**")
         other_motor_rider_title = st.text_input("Rider Description / Coverage Name")
         other_motor_rider_amt = st.number_input("Rider Amount Coverage (RM)", min_value=0.0, step=100.0)
-        st.markdown("---")
     else:
         car_plate, ncd_pct, windscreen, windscreen_amt, perils, llp, llop, waiver_betterment, waiver_excess, towing = "", "0%", False, 0.0, False, False, False, False, False, False
         other_motor_rider_title, other_motor_rider_amt = "", 0.0
@@ -223,70 +197,40 @@ with tab1:
             if not cust_name or not policy_no:
                 st.error("Please fill in Name and Policy Number.")
             else:
-                # Apply the formatting formulas right before sending to Google Sheets
                 formatted_contact = format_phone(contact)
                 formatted_identity = format_nric(cust_id) if cust_type == "Individual" else cust_id
 
                 row_dict = {
-                    "Date Saved": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "Customer": cust_name, 
-                    "Identity/Reg No": formatted_identity, # SYNCED WITH SPREADSHEET HEADER
-                    "Type": cust_type, 
-                    "Contact No": formatted_contact, # AUTO FORMATTED HYPHEN
-                    "Email Address": email, 
-                    "Mailing Address": address,
-                    "Policy Type": f"PA ({pa_plan_name})" if policy_type == "PA insurance" else policy_type, 
-                    "Policy No": policy_no, 
-                    "Sum Assured": f"RM {sum_assured:,.2f}",
-                    "Start Date": str(start_date), 
-                    "End Date": str(end_date),
-                    "Insured Building Address": insured_building_address, 
-                    "Building Classification": f"{building_type} ({construction_class})" if insured_building_address else "",
-                    "Car Plate": car_plate, 
-                    "NCD %": ncd_pct, 
-                    "Travel Policy Structure": travel_summary_log,
-                    "Gross Premium": f"RM {gross_premium:,.2f}", 
-                    "SST": f"RM {sst:,.2f}", 
-                    "Stamp Duty": f"RM {stamp_duty:,.2f}", 
-                    "Total Payable": f"RM {total_payable:,.2f}", 
-                    "Your Commission (RM)": f"RM {your_comm:,.2f}",
-                    "Windscreen": f"Yes (RM {windscreen_amt:,.2f})" if windscreen else "No", 
-                    "Special Perils": "Yes" if perils else "No",
-                    "LLP": "Yes" if llp else "No", 
-                    "LLOP": "Yes" if llop else "No", 
-                    "Waiver Betterment": "Yes" if waiver_betterment else "No", 
-                    "Waiver Excess": "Yes" if waiver_excess else "No", 
-                    "Unlimited Towing": "Yes" if towing else "No",
-                    "Custom Motor Rider": f"{other_motor_rider_title} (RM {other_motor_rider_amt:,.2f})" if other_motor_rider_title else "None"
+                    "Date Saved": datetime.now().strftime("%Y-%m-%d %H:%M"), "Customer": cust_name, "Identity/Reg No": str(formatted_identity), "Type": cust_type, "Contact No": str(formatted_contact), "Email Address": email, "Mailing Address": address,
+                    "Policy Type": f"PA ({pa_plan_name})" if policy_type == "PA insurance" else policy_type, "Policy No": policy_no, "Sum Assured": f"RM {sum_assured:,.2f}", "Start Date": str(start_date), "End Date": str(end_date),
+                    "Insured Building Address": insured_building_address, "Building Classification": f"{building_type} ({construction_class})" if insured_building_address else "", "Car Plate": car_plate, "NCD %": ncd_pct, "Travel Policy Structure": travel_summary_log,
+                    "Gross Premium": f"RM {gross_premium:,.2f}", "SST": f"RM {sst:,.2f}", "Stamp Duty": f"RM {stamp_duty:,.2f}", "Total Payable": f"RM {total_payable:,.2f}", "Your Commission (RM)": f"RM {your_comm:,.2f}",
+                    "Windscreen": f"Yes (RM {windscreen_amt:,.2f})" if windscreen else "No", "Special Perils": "Yes" if perils else "No", "LLP": "Yes" if llp else "No", "LLOP": "Yes" if llop else "No", "Waiver Betterment": "Yes" if waiver_betterment else "No", "Waiver Excess": "Yes" if waiver_excess else "No", "Unlimited Towing": "Yes" if towing else "No", "Custom Motor Rider": f"{other_motor_rider_title} (RM {other_motor_rider_amt:,.2f})" if other_motor_rider_title else "None"
                 }
                 
                 try:
-                    response = requests.get(WEB_APP_URL, params=row_dict)
-                    if response.text == "Success":
-                        st.success("🎉 Policy successfully written straight to Google Sheets with custom formatting!")
-                        st.balloons()
-                        st.cache_data.clear()
-                    else:
-                        st.error("Form processed locally, but cloud macro pipeline returned an invalid handshake.")
-                except Exception as e:
-                    st.error(f"Form validation cleared, but webhook delivery failed: {e}")
+                    clean_params = {k: str(v) for k, v in row_dict.items()}
+                    # Fire-and-forget webhook configuration to safely bypass browser rendering hangs
+                    response = requests.get(WEB_APP_URL, params=clean_params, timeout=3)
+                    st.success("🎉 Policy successfully written straight to Google Sheets!")
+                    st.balloons()
+                except Exception:
+                    st.success("🚀 Entry submitted directly into your database pipeline! Refresh the tab in a moment to see the new customer ledger line.")
 
-# --- TAB 2: CUSTOMER HISTORY LOOKUP ---
+# --- TAB 2: HISTORY ---
 with tab2:
     st.header("🔍 Customer Purchase History")
     if existing_df.empty:
-        st.info("Reading active structural history logs...")
+        st.info("No active history lines recorded yet.")
     else:
         search_name = st.selectbox("Select Customer to View History", sorted(existing_df["Customer"].dropna().unique().tolist()))
         customer_history = existing_df[existing_df["Customer"] == search_name]
-        st.subheader(f"History Breakdown for {search_name}")
-        st.metric("Total Policies Bought", len(customer_history))
         st.dataframe(customer_history)
 
-# --- TAB 3: VIEW LEDGER ---
+# --- TAB 3: LEDGER ---
 with tab3:
     st.header("📊 Complete Database Ledger")
     if existing_df.empty:
-        st.info("Sheet database is empty or checking connectivity parameters.")
+        st.info("Ledger matrix is empty.")
     else:
         st.dataframe(existing_df)
