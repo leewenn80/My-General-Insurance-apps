@@ -227,11 +227,22 @@ with tab1:
                     st.balloons()
                 except Exception as e:
                     st.error(f"Link connection error: {e}")
-
 # --- TAB 2: CUSTOMER HISTORY LOOKUP ---
 with tab2:
     st.header("🔍 Customer Purchase History")
     if existing_df.empty:
         st.info("Reading active structural history logs...")
     else:
-        search_name = st.
+        search_name = st.selectbox("Select Customer to View History", sorted(existing_df["Customer"].dropna().unique().tolist()))
+        customer_history = existing_df[existing_df["Customer"] == search_name]
+        st.subheader(f"History Breakdown for {search_name}")
+        st.metric("Total Policies Bought", len(customer_history))
+        st.dataframe(customer_history)
+
+# --- TAB 3: VIEW LEDGER ---
+with tab3:
+    st.header("📊 Complete Database Ledger")
+    if existing_df.empty:
+        st.info("Sheet database is empty or checking connectivity parameters.")
+    else:
+        st.dataframe(existing_df)
