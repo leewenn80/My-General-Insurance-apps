@@ -9,7 +9,7 @@ st.title("🛡️ General Insurance Sub-Agent Policy Tracker")
 
 # 🔗 CONNECT TO GOOGLE SHEET READ/WRITE LINKS
 GSHEET_URL = "https://docs.google.com/spreadsheets/d/1mnX8oKNsVMLmNl6ywLEuPHaR--cdY5_NhdA0-gluHiQ/edit?gid=0#gid=0"
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxiaJ-c36_VQnqf-YxEWQuNFfF45bSZLICLG1KyuCquxAlwvDnIXSFMCBXQq6J1yw2k9A/exec"
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwNkx8IytjI1iuy7q51A_k8GC3_Unxy5H61O9da0UbLNIz6K-BV7BRc_vVWKXHgNv-uvg/exec"
 
 @st.cache_data(ttl=5)
 def load_data():
@@ -21,19 +21,22 @@ def load_data():
 
 existing_df = load_data()
 
-# Helper function to auto-format Malaysian Phone Numbers (e.g., 0122816710 -> 012-2816710)
+# IMPROVED: Highly flexible phone formatter that restores missing leading zeroes
 def format_phone(phone_str):
     phone_clean = "".join(filter(str.isdigit, str(phone_str)))
-    if len(phone_clean) >= 10 and phone_clean.startswith("0"):
-        # Handles standard 3-digit prefixes (012, 013, 014, 016, 017, 018, 019)
+    if not phone_clean:
+        return phone_str
+    # If user forgot the leading 0 (e.g. 122816710 -> 0122816710)
+    if not phone_clean.startswith("0") and len(phone_clean) in [9, 10]:
+        phone_clean = "0" + phone_clean
+        
+    if len(phone_clean) >= 10:
         if phone_clean[:3] in ["012", "013", "014", "016", "017", "018", "019"]:
             return f"{phone_clean[:3]}-{phone_clean[3:]}"
-        # Handles 4-digit prefixes (011-XXXXXXXX)
         elif phone_clean[:3] == "011":
             return f"{phone_clean[:4]}-{phone_clean[4:]}"
     return phone_str
 
-# Helper function to auto-format Malaysian NRIC Numbers (e.g., 800501045107 -> 800501-04-5107)
 def format_nric(nric_str):
     nric_clean = "".join(filter(str.isdigit, str(nric_str)))
     if len(nric_clean) == 12:
@@ -82,9 +85,9 @@ with tab1:
     with c_col1:
         cust_name = st.text_input("Name / Company Name", value=search_cust if ('search_cust' in locals() and search_cust != "-- New Customer --") else "")
         id_label = "Identity No (NRIC)" if cust_type == "Individual" else "Company Registration No"
-        cust_id = st.text_input(id_label, value=recalled_id, placeholder="Type digits without hyphens...")
+        cust_id = st.text_input(id_label, value=recalled_id)
     with c_col2:
-        contact = st.text_input("Contact Number", value=recalled_contact, placeholder="e.g. 0122816710")
+        contact = st.text_input("Contact Number", value=recalled_contact)
         email = st.text_input("Email Address", value=recalled_email)
     address = st.text_area("Mailing Address", height=68, value=recalled_address)
 
@@ -223,16 +226,15 @@ with tab1:
             if not cust_name or not policy_no:
                 st.error("Please fill in Name and Policy Number.")
             else:
-                # Apply the formatting formulas right before sending to Google Sheets
                 formatted_contact = format_phone(contact)
                 formatted_identity = format_nric(cust_id) if cust_type == "Individual" else cust_id
 
                 row_dict = {
                     "Date Saved": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "Customer": cust_name, 
-                    "Identity/Reg No": formatted_identity, # SYNCED WITH SPREADSHEET HEADER
+                    "Identity/Reg No": str(formatted_identity), 
                     "Type": cust_type, 
-                    "Contact No": formatted_contact, # AUTO FORMATTED HYPHEN
+                    "Contact No": str(formatted_contact), 
                     "Email Address": email, 
                     "Mailing Address": address,
                     "Policy Type": f"PA ({pa_plan_name})" if policy_type == "PA insurance" else policy_type, 
@@ -261,9 +263,10 @@ with tab1:
                 }
                 
                 try:
-                    response = requests.get(WEB_APP_URL, params=row_dict)
+                    # Explicitly forcing query arguments to serialize to clean strings safely
+                    response = requests.get(WEB_APP_URL, params={k: str(v) for k, v in row_dict.items()})
                     if response.text == "Success":
-                        st.success("🎉 Policy successfully written straight to Google Sheets with custom formatting!")
+                        st.success("🎉 Policy successfully written straight to Google Sheets!")
                         st.balloons()
                         st.cache_data.clear()
                     else:
