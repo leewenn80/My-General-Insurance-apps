@@ -7,7 +7,7 @@ st.set_page_config(page_title="Insurance Policy Tracker", layout="wide")
 st.title("🛡️ General Insurance Sub-Agent Policy Tracker")
 
 # 🔗 CONNECT TO GOOGLE SHEET
-GSHEET_URL = "PASTE_YOUR_GOOGLE_SHEET_URL_HERE"
+GSHEET_URL = "https://docs.google.com/spreadsheets/d/1mnX8oKNsVMLmNl6ywLEUpHaR--cdY5_NhdA0-gluHiQ/edit?gid=0#gid=0"
 https://docs.google.com/spreadsheets/d/1mnX8oKNsVMLmNl6ywLEuPHaR--cdY5_NhdA0-gluHiQ/edit?gid=0#gid=0
 @st.cache_data(ttl=5)
 def load_data():
